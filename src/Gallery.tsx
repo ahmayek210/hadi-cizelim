@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowDownToLine, BookOpen, ChevronLeft, Image as ImageIcon } from 'lucide-react'
 import { MODES } from '../shared/protocol.ts'
-import type { GalleryEntry, Session } from '../shared/protocol.ts'
+import type { GalleryEntry, GalleryPage, Session } from '../shared/protocol.ts'
 import { api } from './room.ts'
 
 export async function download(source: string, id: string, file: string, token: string) {
@@ -39,7 +39,7 @@ export function Gallery({ session, sessions, change, close }: { session: Session
   const [entries, setEntries] = useState<GalleryEntry[] | null>(null)
   const [selected, setSelected] = useState<GalleryEntry | null>(null)
   const [error, setError] = useState('')
-  const [limit, setLimit] = useState(12)
+  const [next, setNext] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -47,8 +47,12 @@ export function Gallery({ session, sessions, change, close }: { session: Session
     setEntries(null)
     setSelected(null)
     setError('')
-    setLimit(12)
-    api('gallery', session.token, 'GET', controller.signal).then(response => response.json()).then(setEntries)
+    setNext(null)
+    api('gallery', session.token, 'GET', controller.signal).then(response => response.json()).then((page: GalleryPage) => {
+      if (controller.signal.aborted) return
+      setEntries(page.entries)
+      setNext(page.next)
+    })
       .catch(err => {
         if (controller.signal.aborted) return
         setEntries([])
@@ -56,6 +60,18 @@ export function Gallery({ session, sessions, change, close }: { session: Session
       })
     return () => controller.abort()
   }, [session.token])
+  async function more() {
+    if (!next || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const page: GalleryPage = await (await api('gallery?after=' + next, session.token)).json()
+      setEntries(items => [...(items || []), ...page.entries])
+      setNext(page.next)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Albüm açılamadı.')
+    } finally { setBusy(false) }
+  }
   async function exportFile(file: string) {
     if (!selected || busy) return
     setBusy(true)
@@ -87,11 +103,11 @@ export function Gallery({ session, sessions, change, close }: { session: Session
       </div>
     </> : entries === null ? <p className="empty">Albüm açılıyor…</p> : !entries.length ? <div className="empty"><BookOpen size={28}/><h2>Albüm henüz boş</h2><p>Bir turun sonunda Galeriye kaydet düğmesine dokun.</p></div>
       : <>
-        <div className="gallery-grid">{entries.slice(0, limit).map(entry => <button className="gallery-card" key={entry.id} onClick={() => setSelected(entry)}>
+        <div className="gallery-grid">{entries.map(entry => <button className="gallery-card" key={entry.id} onClick={() => setSelected(entry)}>
           <ProtectedImage path={'gallery/' + entry.id + '/onizleme'} token={session.token} label={title(entry)} />
           <span className="mini-label">{MODES[entry.mode].name} · {date(entry)}</span><strong>{title(entry)}</strong><small>{entry.names.join(' ve ')}</small>
         </button>)}</div>
-        {entries.length > limit && <button className="button secondary" onClick={() => setLimit(n => n + 12)}>Daha fazla göster</button>}
+        {next && <button className="button secondary" onClick={more} disabled={busy}>Daha fazla göster</button>}
       </>}
   </section>
 }

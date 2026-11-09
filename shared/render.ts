@@ -5,11 +5,15 @@ import type { Point, Slot, Stroke } from './protocol.ts'
 export class BoardRenderer {
   private layers = new Map<number, { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; owner: Slot }>()
   private ctx: CanvasRenderingContext2D
+  private canvas: HTMLCanvasElement
+  private makeCanvas: (width: number, height: number) => HTMLCanvasElement
 
   constructor(
-    private canvas: HTMLCanvasElement,
-    private makeCanvas: (width: number, height: number) => HTMLCanvasElement,
+    canvas: HTMLCanvasElement,
+    makeCanvas: (width: number, height: number) => HTMLCanvasElement,
   ) {
+    this.canvas = canvas
+    this.makeCanvas = makeCanvas
     this.ctx = canvas.getContext('2d')!
   }
 

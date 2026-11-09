@@ -37,6 +37,7 @@ export type Session = { code: string; token: string; name: string }
 export type Reply<T = undefined> = { ok: true; value: T } | { ok: false; error: string }
 export type Join = { action: 'create' | 'join' | 'resume'; code: string; name: string; token?: string }
 export type GalleryEntry = RoundInfo
+export type GalleryPage = { entries: GalleryEntry[]; next: string | null }
 export type SocketInput = {
   enter: (input: Join, ack: (reply: Reply<Session>) => void) => void;
   ready: (value: boolean, ack: (reply: Reply) => void) => void;

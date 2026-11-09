@@ -43,10 +43,10 @@ nav { display: flex; gap: 9px; align-items: center; }
 .home, .stage { width: min(1120px, calc(100% - 64px)); margin-inline: auto; animation: settle .24s ease-out; }
 .home { padding-block: 52px 36px; }
 .hero { display: grid; grid-template-columns: .88fr 1fr; gap: 56px; align-items: center; }
-.hero-copy { min-width: 0; padding-block: 8px; }
+.hero-copy { min-width: 0; padding-block: 8px; container-type: inline-size; }
 .eyebrow, .mini-label { display: inline-flex; align-items: center; gap: 7px; color: #776447; font-size: .72rem; letter-spacing: .105em; text-transform: uppercase; font-weight: 850; line-height: 1.4; }
 .ticket { padding: 7px 12px; background: #ede1c8; border: 1px dashed #baa88a; border-radius: 5px; transform: rotate(-2deg); }
-.hero h1 { font-size: clamp(3.35rem, 7.25vw, 6.1rem); line-height: 1.01; margin: 19px 0 13px; color: #44362c; white-space: nowrap; }
+.hero h1 { font-size: clamp(2.25rem, 15.5cqi, 5.2rem); line-height: 1.01; margin: 19px 0 13px; color: #44362c; white-space: nowrap; }
 .hero h1 em { font-weight: 600; color: #87523e; position: relative; }
 .hero h1 em::after { content: ''; position: absolute; left: .04em; right: .07em; bottom: .02em; height: .08em; background: #d7aa66; border-radius: 50%; transform: rotate(-2deg); z-index: -1; }
 .hero h1 em span { color: #87523e; }
@@ -184,7 +184,6 @@ input::placeholder { color: #847566; }
 @media (max-width: 850px) {
   .hero { gap: 24px; }
   .cover-hand { font-size: 1rem; }
-  .hero h1 { font-size: clamp(3.2rem, 8vw, 5.1rem); }
   .home-mode { gap: 7px; }
   .mode-number { display: none; }
 }
@@ -201,7 +200,7 @@ input::placeholder { color: #847566; }
   .home { padding-block: 24px 25px; }
   .hero { grid-template-columns: minmax(0, 1fr); gap: 19px; }
   .hero-copy { padding: 0; }
-  .hero h1 { margin-block: 14px 8px; font-size: clamp(2.9rem, 13vw, 4.8rem); }
+  .hero h1 { margin-block: 14px 8px; font-size: clamp(2.25rem, 14.5cqi, 4.8rem); }
   .lede { font-size: .91rem; }
   .desktop-break { display: none; }
   .join-card { margin-top: 15px; padding: 12px; }
@@ -245,7 +244,6 @@ input::placeholder { color: #847566; }
 }
 @media (max-width: 370px) {
   .nav-button.leave span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .home .hero h1 { font-size: clamp(2.55rem, 12vw, 3.2rem); }
   .join-tabs button { font-size: .76rem; gap: 4px; }
   .mode-time { display: none; }
   .mode-radio { margin-left: auto; }

@@ -67,11 +67,13 @@ app.use('/api', (req, res, next) => {
   next()
 })
 
-app.get('/api/gallery', async (_req, res) => {
+app.get('/api/gallery', async (req, res) => {
   const hash: string = res.locals.hash
-  const entries = await gallery.list(hash)
-  if (!entries.length && !game.isMember(hash)) { res.status(403).json({ error: 'Bu oturumun galeri erişimi yok.' }); return }
-  res.json(entries)
+  const after = req.query.after ?? ''
+  if (typeof after !== 'string' || (after && !UUID.test(after))) { res.status(400).json({ error: 'Galeri sayfası bulunamadı.' }); return }
+  const page = await gallery.list(hash, after)
+  if (!after && !page.entries.length && !game.isMember(hash)) { res.status(403).json({ error: 'Bu oturumun galeri erişimi yok.' }); return }
+  res.json(page)
 })
 
 app.post('/api/gallery/:id', async (req, res) => {

@@ -56,10 +56,11 @@ function Home({ game }: { game: Game }) {
               <div className="code-input"><input id="code" value={code} onChange={e => setCode(e.target.value)} placeholder="Örn. AB4K7M" maxLength={12} autoCapitalize="characters" autoComplete="off" spellCheck={false} required />
                 <button type="button" className="text-button fixed-code" onClick={() => setCode(FIXED)}>Sabit oda</button></div>
             </>}
-            <button className="button primary enter" disabled={game.busy} type="submit">{game.busy ? 'Bağlanıyor…' : action === 'create' ? 'Oda oluştur' : 'Odaya katıl'} <ArrowRight size={19} /></button>
+            <button className="button primary enter" disabled={game.busy || !game.online} type="submit">{game.busy ? 'Bağlanıyor…' : action === 'create' ? 'Oda oluştur' : 'Odaya katıl'} <ArrowRight size={19} /></button>
           </form>
+          {!game.online && <p className="feedback" role="status">Sunucuya bağlanılıyor…</p>}
           {game.error && <p className="notice error" role="alert">{game.error}</p>}
-          {recent && <button className="text-button rejoin" onClick={() => game.enter({ ...recent, action: 'resume' })} disabled={game.busy}><RefreshCw size={15} /> Son odaya dön</button>}
+          {recent && <button className="text-button rejoin" onClick={() => game.enter({ ...recent, action: 'resume' })} disabled={game.busy || !game.online}><RefreshCw size={15} /> Son odaya dön</button>}
         </div>
         <p className="privacy-note"><LockKeyhole size={15} /> Hesap gerekmez. Çizim galerisi odana özel.</p>
       </div>
@@ -112,7 +113,7 @@ function Lobby({ room, online, report }: { room: RoomView; online: boolean; repo
           {([0, 1] as const).map(slot => {
             const p = room.players.find(player => player.slot === slot)
             return <div className={'seat ' + (p ? '' : 'vacant')} key={slot}>
-              <span className="seat-icon">{p ? p.name[0].toLocaleUpperCase('tr') : <Plus size={18}/>}</span>
+              <span className="seat-icon">{p ? [...p.name][0].toLocaleUpperCase('tr') : <Plus size={18}/>}</span>
               <span><strong>{p?.name || 'Arkadaşın bekleniyor'}</strong>{p?.slot === room.me && <span className="you"> · Sen</span>}
                 <small>{p ? !p.connected ? 'Bağlantı kesildi' : p.ready ? 'Hazır' : 'Bağlı · Bekliyor' : 'Boş koltuk'}</small></span>
               {p?.ready && p.connected && <Check size={19} className="seat-check" />}
@@ -258,7 +259,7 @@ export function App() {
   useEffect(() => { if (phase === 'drawing') setAlbum(null) }, [phase])
   let content: ReactNode
   if (album) {
-    content = <Gallery session={album} sessions={gallerySessions} change={setAlbum} close={() => setAlbum(null)} />
+    content = <Gallery key={album.token} session={album} sessions={gallerySessions} change={setAlbum} close={() => setAlbum(null)} />
   } else if (!room) {
     content = game.booting ? <section className="stage empty" role="status">Çizim masası açılıyor…</section> : <Home game={game} />
   } else if (room.phase === 'lobby') {

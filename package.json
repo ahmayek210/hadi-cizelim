@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "dev:api": "node --experimental-transform-types --watch server/index.ts",
-    "start": "node --experimental-transform-types server/index.ts",
+    "dev:api": "node --watch server/index.ts",
+    "start": "node server/index.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "playwright test",

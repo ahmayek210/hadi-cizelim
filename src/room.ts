@@ -21,7 +21,7 @@ function remember(session: Session) {
   current = session
   sessionStorage.setItem(ACTIVE, JSON.stringify(session))
   localStorage.setItem(NAME, JSON.stringify(session.name))
-  localStorage.setItem(HISTORY, JSON.stringify([session, ...history().filter(s => s.token !== session.token)].slice(0, 30)))
+  localStorage.setItem(HISTORY, JSON.stringify([session, ...history().filter(s => s.token !== session.token)]))
 }
 function forget() {
   current = null

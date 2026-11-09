@@ -49,8 +49,10 @@ export class Game {
   private results = new Map<string, Round>()
   private limits = new RateLimit()
   private identities = new Map<string, Player>()
+  private io: Hub
 
-  constructor(private io: Hub) {
+  constructor(io: Hub) {
+    this.io = io
     io.on('connection', socket => this.connect(socket))
     setInterval(() => {
       this.limits.prune()
@@ -177,7 +179,11 @@ export class Game {
   }
 
   private schedule(room: Room) {
-    room.timer = setTimeout(() => this.advance(room), Math.max(1, room.round!.endsAt - Date.now())).unref()
+    const endsAt = room.round!.endsAt
+    room.timer = setTimeout(() => {
+      if (Date.now() < endsAt) this.schedule(room)
+      else this.advance(room)
+    }, Math.max(1, endsAt - Date.now())).unref()
   }
 
   private start(room: Room) {

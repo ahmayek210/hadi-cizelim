@@ -69,10 +69,17 @@ export async function openGallery() {
       await Promise.all([query('SELECT 1'), objects.check()])
       return local ? 'local' : 'neon'
     },
-    async list(hash: string) {
-      const data = await query<{ metadata: GalleryEntry }>(
-        'SELECT metadata FROM drawing_gallery WHERE member_a = $1 OR member_b = $1 ORDER BY saved_at DESC LIMIT 100', [hash])
-      return data.rows.map(row => row.metadata)
+    async list(hash: string, after: string) {
+      const data = await query<{ metadata: GalleryEntry }>(`
+        SELECT metadata FROM drawing_gallery
+        WHERE (member_a = $1 OR member_b = $1)
+          AND (NULLIF($2, '') IS NULL OR (saved_at, id) < (
+            SELECT saved_at, id FROM drawing_gallery
+            WHERE id = NULLIF($2, '')::uuid AND (member_a = $1 OR member_b = $1)
+          ))
+        ORDER BY saved_at DESC, id DESC LIMIT 13`, [hash, after])
+      const entries = data.rows.slice(0, 12).map(row => row.metadata)
+      return { entries, next: data.rows.length > 12 ? entries[11].id : null }
     },
     async entry(hash: string, id: string) {
       const data = await query<{ metadata: GalleryEntry }>(

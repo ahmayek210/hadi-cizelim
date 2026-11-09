@@ -51,7 +51,5 @@ export function CoverArt() {
       </g>
       <path d="M294 429c11 1 26-1 37-10m-6 13 7-13-14-2" stroke="#76604E" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
-    <span className="cover-index">ÇİZİM DEFTERİ / 01</span>
-    <span className="cover-hand">İki kalem, bol kahkaha.</span>
   </div>
 }

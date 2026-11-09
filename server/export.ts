@@ -1,7 +1,6 @@
 import { createCanvas, loadImage, type Canvas, type SKRSContext2D } from '@napi-rs/canvas'
 import { fileURLToPath } from 'node:url'
 import { zipSync } from 'fflate'
-import { MODES, PAPER } from '../shared/protocol.ts'
 import type { Stroke } from '../shared/protocol.ts'
 import { BoardRenderer } from '../shared/render.ts'
 import type { Round } from './game.ts'
@@ -35,42 +34,58 @@ function wrap(ctx: SKRSContext2D, line: string, width: number) {
 }
 
 async function exhibit(round: Round, drawings: Canvas[]) {
-  const w = 1600
-  const image = 'reference' in round.prompt ? await loadImage(fileURLToPath(new URL(round.prompt.reference, ASSETS))) : null
-  const title = 'sentence' in round.prompt ? round.prompt.sentence : 'Referans fotoğrafı'
-  const canvas = createCanvas(w, image ? 1320 : 1060)
-  const ctx = canvas.getContext('2d')
-  ctx.fillStyle = '#F1E5D2'
-  ctx.fillRect(0, 0, w, canvas.height)
-  ctx.fillStyle = '#463B32'
-  ctx.font = 'bold 52px sans-serif'
-  ctx.fillText('Hadi Çizelim', 56, 78)
-  ctx.fillStyle = '#766A5D'
-  ctx.font = '26px sans-serif'
-  ctx.fillText(MODES[round.mode].name, 59, 117)
-  ctx.fillStyle = '#463B32'
-  ctx.font = 'bold 35px sans-serif'
-  wrap(ctx, title, 1450).forEach((row, i) => ctx.fillText(row, 56, 174 + i * 41))
-  if (image) {
-    const scale = Math.min(540 / image.width, 280 / image.height)
-    ctx.drawImage(image, 56, 203, image.width * scale, image.height * scale)
-  }
-  const startY = image ? 520 : 250
-  const drawingWidth = drawings.length === 1 ? 930 : 722
+  const width = 2400
+  const margin = 60
+  const gap = 48
+  const inset = 16
+  const nameHeight = 88
+  const relay = drawings.length === 1
+  const frameWidth = relay ? 1776 : (width - 2 * margin - gap) / 2
+  const drawingWidth = frameWidth - 2 * inset
   const drawingHeight = drawingWidth * 3 / 4
-  drawings.forEach((drawing, index) => {
-    const x = drawings.length === 1 ? (w - drawingWidth) / 2 : 56 + index * (drawingWidth + 44)
-    ctx.fillStyle = PAPER
-    ctx.fillRect(x - 8, startY - 8, drawingWidth + 16, drawingHeight + 61)
-    ctx.drawImage(drawing, x, startY, drawingWidth, drawingHeight)
+  const frameHeight = inset + drawingHeight + nameHeight
+
+  const image = 'reference' in round.prompt ? await loadImage(fileURLToPath(new URL(round.prompt.reference, ASSETS))) : null
+  const imageScale = image ? Math.min(1488 / image.width, 960 / image.height) : 0
+  const imageWidth = image ? image.width * imageScale : 0
+  const imageHeight = image ? Math.ceil(image.height * imageScale) : 0
+  const sentence = 'sentence' in round.prompt ? round.prompt.sentence : ''
+  const sentenceFont = 'bold 70px serif'
+  const lineHeight = 83
+  const measure = createCanvas(1, 1).getContext('2d')
+  measure.font = sentenceFont
+  const lines = sentence ? wrap(measure, sentence, 2070) : []
+  const frameTop = margin + (image ? imageHeight : lines.length * lineHeight) + gap
+  const canvas = createCanvas(width, frameTop + frameHeight + margin)
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#F7F1E5'
+  ctx.fillRect(0, 0, width, canvas.height)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+
+  if (image) {
+    ctx.drawImage(image, (width - imageWidth) / 2, margin, imageWidth, image.height * imageScale)
+  } else {
     ctx.fillStyle = '#463B32'
-    ctx.font = 'bold 27px sans-serif'
-    const label = drawings.length === 1 ? round.names.join(' ve ') : round.names[index]
-    ctx.fillText(label, x + 12, startY + drawingHeight + 37, drawingWidth - 24)
+    ctx.font = sentenceFont
+    lines.forEach((line, index) => ctx.fillText(line, width / 2, margin + (index + .5) * lineHeight))
+  }
+
+  drawings.forEach((drawing, index) => {
+    const x = relay ? (width - frameWidth) / 2 : margin + index * (frameWidth + gap)
+    ctx.beginPath()
+    ctx.roundRect(x, frameTop, frameWidth, frameHeight, 20)
+    ctx.fillStyle = '#E9D5B8'
+    ctx.fill()
+    ctx.strokeStyle = '#CBB592'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.drawImage(drawing, x + inset, frameTop + inset, drawingWidth, drawingHeight)
+    ctx.fillStyle = '#463B32'
+    ctx.font = 'bold 52px sans-serif'
+    const label = relay ? round.names.join(' ve ') : round.names[index]
+    ctx.fillText(label, x + frameWidth / 2, frameTop + inset + drawingHeight + nameHeight / 2, drawingWidth - 16)
   })
-  ctx.font = 'italic 28px sans-serif'
-  ctx.fillStyle = '#766A5D'
-  ctx.fillText(round.quote, 56, canvas.height - 38)
   return canvas
 }
 

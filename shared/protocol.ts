@@ -11,9 +11,9 @@ export const WIDTHS = [0.004, 0.009, 0.02] as const
 export const PAPER = '#FFFCF6'
 export const REFERENCES = refs
 export const MODES = {
-  reference: { name: 'Referanstan Çiz', duration: '60 saniye', description: 'Aynı kare, iki ayrı yorum.' },
-  sentence: { name: 'Cümleden Çiz', duration: '60 saniye', description: 'Bir cümleye iki farklı hayal gücü.' },
-  relay: { name: 'Sıralı Çizim', duration: '8 × 15 saniye', description: 'Tek kâğıt, sıra sıra iki kalem.' },
+  reference: { name: 'Referanstan Çiz', duration: '60 sn' },
+  sentence: { name: 'Cümleden Çiz', duration: '60 sn' },
+  relay: { name: 'Sıralı Çizim', duration: '8 × 15 sn' },
 } as const
 export type Mode = keyof typeof MODES
 export type Slot = 0 | 1

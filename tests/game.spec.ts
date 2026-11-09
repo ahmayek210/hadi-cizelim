@@ -4,7 +4,6 @@ import { chromium, firefox, expect, test, devices } from '@playwright/test'
 import type { BrowserContext, Download, Page } from '@playwright/test'
 import { io, type Socket } from 'socket.io-client'
 import { createCanvas, loadImage } from '@napi-rs/canvas'
-import { unzipSync } from 'fflate'
 import type { DrawInput, RoomView, Session, SocketInput, SocketOutput } from '../shared/protocol.ts'
 import { site, backend } from '../playwright.config.ts'
 
@@ -47,12 +46,23 @@ async function touch(context: BrowserContext, page: Page) {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await cdp.detach()
 }
-async function readDownload(page: Page, label: string) {
-  const [file] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: label, exact: true }).click()])
+async function readDownload(page: Page) {
+  const button = page.getByRole('button', { name: 'Çizimi İndir', exact: true })
+  await expect(button).toHaveCount(1)
+  const [file] = await Promise.all([page.waitForEvent('download'), button.click()])
+  expect(file.suggestedFilename()).toMatch(/^hadi-cizelim-[0-9a-f]{8}\.png$/)
   return readFile((await (file as Download).path())!)
 }
 
-test('sabit oda, iki tarayıcı, gizli tuval, süre, PNG, ZIP ve özel galeri', async ({ request }) => {
+async function openPng(bytes: Buffer) {
+  const image = await loadImage(bytes)
+  expect(image.width).toBe(2400)
+  const ctx = createCanvas(image.width, image.height).getContext('2d')
+  ctx.drawImage(image, 0, 0)
+  return { height: image.height, ctx, at: (x: number, y: number) => Array.from(ctx.getImageData(x, y, 1, 1).data) }
+}
+
+test('sabit oda, iki tarayıcı, gizli tuval, süre, referanslı PNG ve özel galeri', async ({ request }) => {
   const [aBrowser, bBrowser] = await Promise.all([chromium.launch(), firefox.launch()])
   try {
     const a = await aBrowser.newPage()
@@ -93,19 +103,25 @@ test('sabit oda, iki tarayıcı, gizli tuval, süre, PNG, ZIP ve özel galeri', 
     expect(Date.now() - started).toBeGreaterThanOrEqual(59_000)
     await expect(results(b)).toBeVisible()
     await expect(canvas(a)).toHaveCount(0)
+    await expect(results(a).getByRole('button')).toHaveCount(3)
+    await expect(results(a).locator('figcaption')).toHaveText(['Deniz', 'Ece'])
     const id = (await results(a).getAttribute('data-round'))!
-    const own = await readDownload(a, 'Kendi çizimimi indir')
-    const img = await loadImage(own)
-    expect([img.width, img.height]).toEqual([1440, 1080])
-    const bitmap = createCanvas(img.width, img.height).getContext('2d')
-    bitmap.drawImage(img, 0, 0)
-    expect(Array.from(bitmap.getImageData(720, 324, 1, 1).data)).toEqual(penPixel)
-    expect(Array.from(bitmap.getImageData(20, 20, 1, 1).data)).toEqual(emptyPixel)
-    const combined = await loadImage(await readDownload(a, 'İki çizimi birlikte indir'))
-    expect([combined.width, combined.height]).toEqual([1600, 1320])
-    const archive = unzipSync(await readDownload(a, 'Tüm sonuçları indir (ZIP)'))
-    expect(Object.keys(archive).sort()).toEqual(['birinci', 'ikinci', 'sergi'].map(name => 'hadi-cizelim-' + id.slice(0, 8) + '-' + name + '.png'))
-    for (const bytes of Object.values(archive)) expect((await loadImage(Buffer.from(bytes))).height).toBeGreaterThan(1000)
+    const refResponse = await request.get(new URL((await ref(a).getAttribute('src'))!, site).toString())
+    const reference = await loadImage(await refResponse.body())
+    const scale = Math.min(1488 / reference.width, 960 / reference.height)
+    const refHeight = Math.ceil(reference.height * scale)
+    const combined = await openPng(await readDownload(a))
+    expect(combined.height).toBe(1085 + refHeight)
+    const referencePixels = createCanvas(2400, refHeight + 60).getContext('2d')
+    referencePixels.drawImage(reference, (2400 - reference.width * scale) / 2, 60, reference.width * scale, reference.height * scale)
+    for (const x of [1100, 1200, 1300]) {
+      const y = 60 + Math.floor(refHeight / 2)
+      expect(combined.at(x, y)).toEqual(Array.from(referencePixels.getImageData(x, y, 1, 1).data))
+    }
+    expect(combined.at(100, 60 + Math.floor(refHeight / 2))).toEqual([247, 241, 229, 255])
+    const boardTop = 124 + refHeight
+    expect(combined.at(618, boardTop + 244)).toEqual(penPixel)
+    expect(combined.at(1782, boardTop + 528)).toEqual(bluePixel)
     await a.getByRole('button', { name: 'Galeriye kaydet' }).click()
     await expect(a.getByRole('button', { name: 'Galeriye kaydedildi' })).toBeVisible({ timeout: 16_000 })
     const url = backend + '/api/gallery/' + id + '/sergi'
@@ -116,9 +132,11 @@ test('sabit oda, iki tarayıcı, gizli tuval, süre, PNG, ZIP ve özel galeri', 
     const cSession = await session(c)
     expect((await request.get(url, { headers: auth(cSession) })).status()).toBe(404)
     expect(await (await request.get(backend + '/api/gallery', { headers: auth(cSession) })).json()).toEqual({ entries: [], next: null })
-    await a.getByRole('button', { name: 'Galeriye git' }).click()
+    await a.getByRole('button', { name: 'Galerim' }).click()
     await a.getByRole('button', { name: /Referanstan Çiz/ }).click()
     await expect(a.getByRole('img', { name: 'Referans fotoğrafı' })).toBeVisible()
+    await expect(a.locator('.gallery-detail').getByRole('button')).toHaveCount(2)
+    expect(await readDownload(a)).toEqual(await (await request.get(url, { headers: auth(aSession) })).body())
     await a.getByRole('button', { name: 'Odadan ayrıl' }).click()
     await b.getByRole('button', { name: 'Odadan ayrıl' }).click()
     expect((await request.get(url, { headers: auth(aSession) })).ok()).toBeTruthy()
@@ -148,6 +166,7 @@ test('cümle modu, davet, mobil dokunmatik kalem, silgi ve geri alma', async () 
     await expect(sentence).toBeVisible()
     await expect(b.getByTestId('sentence')).toHaveText(await sentence.innerText())
     expect(await b.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+    expect(await canvas(b).evaluate(node => node.getBoundingClientRect().width / innerWidth)).toBeGreaterThanOrEqual(.99)
     expect(await canvas(b).evaluate(node => getComputedStyle(node).touchAction)).toBe('none')
     await touch(mobile, b)
     await expect.poll(() => pixel(b, .5, .45)).toEqual(penPixel)
@@ -162,6 +181,19 @@ test('cümle modu, davet, mobil dokunmatik kalem, silgi ve geri alma', async () 
     await expect.poll(() => pixel(b, .5, .45)).toEqual(penPixel)
     await expect(results(a)).toBeVisible({ timeout: 65_000 })
     await expect(results(b)).toBeVisible()
+    const [left, right] = await results(b).locator('canvas').evaluateAll(nodes => nodes.map(node => {
+      const { x, y, width, right } = node.getBoundingClientRect()
+      return { x, y, width, right }
+    }))
+    expect(left.y).toBe(right.y)
+    expect(Math.abs(left.width - right.width)).toBeLessThan(.5)
+    expect(left.right).toBeLessThan(right.x)
+    expect(await b.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+    await expect(results(b).locator('figcaption')).toHaveText(['Mert', 'İpek'])
+    const sentencePng = await openPng(await readDownload(b))
+    const sentenceInk = sentencePng.ctx.getImageData(140, 60, 2120, sentencePng.height - 1085).data
+    expect(sentenceInk.some((channel, index) => index % 4 === 0 && channel < 100)).toBeTruthy()
+    expect(sentencePng.at(1782, sentencePng.height - 60 - 88 - 813 + 366)).toEqual(penPixel)
     await a.getByRole('button', { name: 'Tekrar oyna' }).click()
     await expect(a.getByRole('heading', { name: 'Oyun lobisi' })).toBeVisible()
     await expect(b.getByRole('heading', { name: 'Oyun lobisi' })).toBeVisible()
@@ -226,14 +258,13 @@ test('ortak tuval sekiz adet 15 saniyelik sıra, sunucu yetkisi ve yeniden bağl
     }
     await expect.poll(() => latest(1)?.phase, { timeout: 19_000 }).toBe('results')
     expect((await a.emitWithAck('draw', { ...stroke, turn: 7 })).ok).toBeFalsy()
-    const shared = await request.get(backend + '/api/result/' + initial.id + '/ortak', { headers: auth(first.value) })
+    const shared = await request.get(backend + '/api/result/' + initial.id + '/sergi', { headers: auth(first.value) })
     expect(shared.ok()).toBeTruthy()
-    const image = await loadImage(await shared.body())
-    expect([image.width, image.height]).toEqual([1440, 1080])
-    const ctx = createCanvas(image.width, image.height).getContext('2d')
-    ctx.drawImage(image, 0, 0)
-    expect(Array.from(ctx.getImageData(720, 324, 1, 1).data)).toEqual(penPixel)
-    expect(Array.from(ctx.getImageData(720, 756, 1, 1).data)).toEqual(bluePixel)
+    const composition = await openPng(await shared.body())
+    const top = composition.height - 60 - 88 - 1308
+    expect(composition.at(1200, top + 392)).toEqual(penPixel)
+    expect(composition.at(1200, top + 916)).toEqual(bluePixel)
+    expect(composition.at(200, top + 392)).toEqual([247, 241, 229, 255])
   } finally {
     for (const peer of peers) peer.disconnect()
   }

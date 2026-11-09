@@ -7,7 +7,7 @@
 1. Adını yazıp oda oluştur. Arkadaşına oda kodunu ya da davet bağlantısını gönder. İsterseniz ikiniz de `HADICIZELIM` koduyla sabit odaya katılabilirsiniz.
 2. Oda sahibi modu seçer. İki oyuncu hazır olunca oyunu başlatır.
 3. Referanstan Çiz ve Cümleden Çiz modlarında her oyuncu kendi tuvalinde 60 saniye çizer. Sıralı Çizim modunda ortak tuvalde her oyuncuya 15 saniyelik dörder sıra verilir.
-4. Sergide PNG veya ZIP indir. **Galeriye kaydet** ile turu iki katılımcının özel albümünde sakla.
+4. **Çizimi İndir** ile turun tamamını tek bir PNG olarak indir. **Galeriye kaydet** ile turu iki katılımcının özel albümünde sakla.
 
 Katılım anahtarı tarayıcıda saklanır. Sayfayı yenilediğinde aynı oyuncu olarak devam edebilirsin. Lobide bağlantısı kopan oyuncunun yeri beş dakika tutulur. Herkesin ayrıldığı odalar yeniden kullanılabilir. Oda kodu lobiyi bulur. Galeri erişimini o turdaki katılım anahtarları belirler. Tarayıcı verileri temizlenirse saklanan anahtarlar da kaybolur.
 

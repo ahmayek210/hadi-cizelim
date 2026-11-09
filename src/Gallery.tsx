@@ -4,12 +4,12 @@ import { MODES } from '../shared/protocol.ts'
 import type { GalleryEntry, GalleryPage, Session } from '../shared/protocol.ts'
 import { api } from './room.ts'
 
-export async function download(source: string, id: string, file: string, token: string) {
-  const response = await api(source + '/' + id + '/' + file, token)
+export async function downloadDrawing(source: 'result' | 'gallery', id: string, token: string) {
+  const response = await api(source + '/' + id + '/sergi', token)
   const url = URL.createObjectURL(await response.blob())
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = 'hadi-cizelim-' + id.slice(0, 8) + (file === 'zip' ? '.zip' : '-' + file + '.png')
+  anchor.download = 'hadi-cizelim-' + id.slice(0, 8) + '.png'
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
@@ -72,24 +72,19 @@ export function Gallery({ session, sessions, change, close }: { session: Session
       setError(err instanceof Error ? err.message : 'Albüm açılamadı.')
     } finally { setBusy(false) }
   }
-  async function exportFile(file: string) {
+  async function exportFile() {
     if (!selected || busy) return
     setBusy(true)
     setError('')
-    try { await download('gallery', selected.id, file, session.token) }
+    try { await downloadDrawing('gallery', selected.id, session.token) }
     catch (err) { setError(err instanceof Error ? err.message : 'Dosya indirilemedi.') }
     finally { setBusy(false) }
   }
   const title = (entry: GalleryEntry) => 'sentence' in entry.prompt ? entry.prompt.sentence : 'Referans fotoğrafı'
   const date = (entry: GalleryEntry) => new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium' }).format(new Date(entry.date))
-  return <section className="stage gallery">
+  return <section className={'stage gallery' + (selected ? ' gallery-detail' : '')}>
     <button className="text-button" onClick={() => selected ? setSelected(null) : close()}><ChevronLeft size={18} /> {selected ? 'Galeriye dön' : 'Geri dön'}</button>
-    <div className="stage-intro">
-      <span className="eyebrow"><BookOpen size={16} /> ÖZEL ALBÜM</span>
-      <h1>{selected ? title(selected) : 'Çizim galerisi'}</h1>
-      {selected ? <p>{MODES[selected.mode].name} · {selected.names.join(' ve ')} · {date(selected)}</p>
-        : <p>Birlikte çizdiğiniz ve saklamak istediğiniz turlar.</p>}
-    </div>
+    <h1 className={selected ? 'sr-only' : 'gallery-heading'}>{selected ? title(selected) : 'Çizim galerisi'}</h1>
     {!selected && sessions.length > 1 && <label className="gallery-select">Oda oturumu
       <select value={session.token} onChange={event => { const next = sessions.find(s => s.token === event.target.value); if (next) change(next) }}>
         {sessions.map((s, i) => <option value={s.token} key={s.token}>{s.code} · {s.name} · {i + 1}</option>)}
@@ -97,11 +92,10 @@ export function Gallery({ session, sessions, change, close }: { session: Session
     {error && <p className="notice error" role="alert">{error}</p>}
     {selected ? <>
       <div className="exhibit-image"><ProtectedImage key={selected.id} path={'gallery/' + selected.id + '/sergi'} token={session.token} label={title(selected)} /></div>
-      <div className="action-row">
-        <button className="button primary" disabled={busy} onClick={() => exportFile('sergi')}><ArrowDownToLine size={18} /> PNG indir</button>
-        <button className="button secondary" disabled={busy} onClick={() => exportFile('zip')}><ArrowDownToLine size={18} /> ZIP indir</button>
+      <div className="action-row gallery-actions">
+        <button className="button primary" disabled={busy} onClick={exportFile}><ArrowDownToLine size={18} /> Çizimi İndir</button>
       </div>
-    </> : entries === null ? <p className="empty">Albüm açılıyor…</p> : !entries.length ? <div className="empty"><BookOpen size={28}/><h2>Albüm henüz boş</h2><p>Bir turun sonunda Galeriye kaydet düğmesine dokun.</p></div>
+    </> : entries === null ? <p className="empty" role="status">Albüm açılıyor…</p> : !entries.length ? <div className="empty"><BookOpen size={28}/><h2>Albüm henüz boş</h2></div>
       : <>
         <div className="gallery-grid">{entries.map(entry => <button className="gallery-card" key={entry.id} onClick={() => setSelected(entry)}>
           <ProtectedImage path={'gallery/' + entry.id + '/onizleme'} token={session.token} label={title(entry)} />

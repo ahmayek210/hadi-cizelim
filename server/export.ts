@@ -91,10 +91,29 @@ async function exhibit(round: Round, drawings: Canvas[]) {
 
 export type ResultFile = 'birinci' | 'ikinci' | 'ortak' | 'sergi' | 'onizleme'
 export const resultFiles = (mode: Round['mode']): ResultFile[] =>
-  mode === 'relay' ? ['ortak', 'sergi', 'onizleme'] : ['birinci', 'ikinci', 'sergi', 'onizleme']
+  mode === 'relay' || mode === 'guess' ? ['ortak', 'sergi', 'onizleme'] : ['birinci', 'ikinci', 'sergi', 'onizleme']
 export type Exports = Partial<Record<ResultFile, Buffer>>
 
 export async function renderExports(round: Round): Promise<Exports> {
+  if (round.mode === 'guess' && round.guessState) {
+    const results = round.guessState.results
+    const canvas = createCanvas(2400, 2200), ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#F7F1E5'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#463B32'
+    ctx.font = 'bold 64px serif'; ctx.fillText(`Birlikte ${results.filter(r => r.success).length}/6 kelime bildiniz!`, 1200, 75)
+    results.forEach((result, i) => {
+      const x = 60 + (i % 3) * 780, y = 140 + Math.floor(i / 3) * 1010
+      ctx.fillStyle = '#E9D5B8'; ctx.fillRect(x, y, 720, 940)
+      ctx.drawImage(board(result.strokes), x + 15, y + 15, 690, 517.5)
+      ctx.fillStyle = '#463B32'; ctx.font = 'bold 40px sans-serif'
+      ctx.fillText(`${i + 1}. ${result.word}`, x + 360, y + 590, 670)
+      ctx.font = '32px sans-serif'; ctx.fillText(result.success ? `Bilindi · ${result.seconds} saniye` : 'Süre doldu', x + 360, y + 650, 670)
+      ctx.fillText(`${round.names[result.drawer]} çizdi`, x + 360, y + 710, 670)
+    })
+    const thumb = createCanvas(420, 385); thumb.getContext('2d').drawImage(canvas, 0, 0, 420, 385)
+    const [sergi, onizleme] = await Promise.all([canvas.encode('png'), thumb.encode('png')])
+    return { ortak: sergi, sergi, onizleme }
+  }
   const drawings = round.mode === 'relay'
     ? [board(round.strokes)]
     : [board(round.strokes.filter(s => s.owner === 0)), board(round.strokes.filter(s => s.owner === 1))]

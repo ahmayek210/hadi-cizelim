@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties, FormEvent, ReactNode } from 'react'
-import { ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, Check, Clock3, Copy, Eraser, Image as ImageIcon, Layers2, Link2, Pencil, Plus, RefreshCw, Undo2, UsersRound, WifiOff } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, Check, Clock3, Copy, Eraser, Image as ImageIcon, Layers2, Link2, MessageCircle, Pencil, Plus, RefreshCw, Undo2, UsersRound, WifiOff } from 'lucide-react'
 import { FIXED, MODES, PALETTE, REFERENCES, normalizeCode } from '../shared/protocol.ts'
 import type { Mode, Prompt, RoomView, RoundView, Session } from '../shared/protocol.ts'
 import { CoverArt } from './Art.tsx'
@@ -9,7 +9,8 @@ import { Gallery, downloadDrawing } from './Gallery.tsx'
 import { api, gameNow, history, lastName, socket, useRoom } from './room.ts'
 
 type Game = ReturnType<typeof useRoom>
-const MODE_ICONS = { reference: ImageIcon, sentence: Pencil, relay: Layers2 }
+const MODE_ICONS = { reference: ImageIcon, sentence: Pencil, relay: Layers2, guess: MessageCircle }
+const MODE_DESCRIPTIONS: Record<Mode, string> = { reference: 'Aynı görsele bakarak ayrı ayrı çizin.', sentence: 'Aynı cümleyi kendi tuvalinizde yorumlayın.', relay: 'Ortak çizimi sırayla tamamlayın.', guess: 'Biriniz çizsin, diğeriniz kelimeyi bulsun.' }
 const WIDTH_LABELS = ['İnce', 'Orta', 'Kalın']
 const modeList = Object.entries(MODES) as [Mode, typeof MODES[Mode]][]
 const labels = ['Birinci oyuncu', 'İkinci oyuncu']
@@ -114,12 +115,12 @@ function Lobby({ room, online, report }: { room: RoomView; online: boolean; repo
       </aside>
       <div className="paper-panel mode-panel">
         <h2 id="mode-heading">Oyun modu</h2>
-        {!host && <p className="sr-only" id="mode-owner">Oyun modunu oda sahibi seçer.</p>}
+        {!host && <p className="feedback" id="mode-owner">Modu oda sahibi seçer.</p>}
         <div className="mode-list" role="group" aria-labelledby="mode-heading" aria-describedby={host ? undefined : 'mode-owner'}>{modeList.map(([mode, details]) => {
           const Icon = MODE_ICONS[mode]
           return <button key={mode} className={'mode-choice ' + mode} disabled={!host || !online} aria-pressed={room.mode === mode}
             onClick={() => socket.emit('mode', mode, report)}><span className="mode-icon"><Icon size={22} /></span>
-            <strong>{details.name}</strong><small>{details.duration}</small></button>
+            <strong>{details.name}</strong><span className="mode-description">{MODE_DESCRIPTIONS[mode]}</span><small>{details.duration}{room.mode === mode ? " · Seçili" : ""}</small></button>
         })}</div>
         <div className="action-row">
           <button className={'button ' + (own.ready ? 'secondary' : 'primary')} disabled={!online} onClick={() => socket.emit('ready', !own.ready, report)}><Check size={19} /> {own.ready ? 'Hazır değilim' : 'Hazırım'}</button>
@@ -145,6 +146,9 @@ function Drawing({ room, online, game }: { room: RoomView & { round: RoundView }
   const { round, me } = room
   const [brush, setBrush] = useState({ color: 0, size: 1, erase: false })
   const [now, setNow] = useState(gameNow)
+  const [guess, setGuess] = useState('')
+  const [feedback, setFeedback] = useState('')
+  useEffect(() => { setGuess(''); setFeedback(''); setBrush({ color: 0, size: 1, erase: false }) }, [round.turn])
   useEffect(() => {
     const interval = window.setInterval(() => setNow(gameNow()), 90)
     return () => window.clearInterval(interval)
@@ -152,16 +156,30 @@ function Drawing({ room, online, game }: { room: RoomView & { round: RoundView }
   const remaining = Math.max(0, round.endsAt - now)
   const seconds = Math.ceil(remaining / 1000)
   const relay = round.mode === 'relay'
-  const enabled = online && seconds > 0 && (!relay || round.active === me)
+  const guessing = round.mode === 'guess'
+  const enabled = online && seconds > 0 && (!relay || round.active === me) && (!guessing || (round.guess?.stage === 'playing' && round.active === me))
   const previous = round.strokes.findLast(s => s.owner === me)
   const headline = !seconds ? 'Süre doldu' : !relay ? '' :
     round.active === me ? 'Sıra sende!' : round.names[round.active!] + ' çiziyor'
+  function submitGuess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const text = guess.trim()
+    if (!text) return
+    setGuess('')
+    socket.emit('guess', { round: round.id, turn: round.turn, text }, reply => {
+      if (reply.ok && !reply.value.correct) setFeedback('Bir daha dene!')
+      else if (!reply.ok) setFeedback(reply.error)
+    })
+  }
   const time = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
   return <section className="stage drawing">
     <h1 className="sr-only">{MODES[round.mode].name}</h1>
     <div className="drawing-layout">
       <aside className="drawing-context">
-        <PromptCard prompt={round.prompt} />
+        {guessing ? <div className="guess-context" aria-live="polite">
+          <strong>Tur {round.turn + 1}/6</strong>
+          {round.guess?.stage === 'transition' ? <><p>{round.guess.results.at(-1)?.success ? 'Bildiniz!' : 'Süre doldu!'}</p><p>{round.guess.results.at(-1)?.word}{round.guess.results.at(-1)?.success ? ` · ${round.guess.results.at(-1)?.seconds} saniye` : ''}</p></> : <><p>{round.active === me ? `Çizeceğin kelime: ${round.guess?.word}` : `${round.names[round.active!]} çiziyor`}</p>{round.active !== me && <p aria-label="Kelimenin harf sayısı">{round.guess?.hint}</p>}<small>{round.guess?.stage === 'preparing' ? 'Hazırlanın…' : round.active === me ? `${round.names[1 - me]} tahmin ediyor` : 'Kelimeyi tahmin et'}</small></>}
+        </div> : <PromptCard prompt={round.prompt} />}
         <div className="round-clock">
           <div className={'clock ' + (seconds < 6 ? 'urgent' : '')} aria-label="Kalan süre"><Clock3 size={18} /> <span data-testid="timer">{time}</span></div>
           {headline && <strong className="turn-status" role="status">{headline}</strong>}
@@ -173,7 +191,10 @@ function Drawing({ room, online, game }: { room: RoomView & { round: RoundView }
           <Board key={round.id} strokes={round.strokes} label="Çizim tuvali"
             input={{ brush, enabled, endsAt: round.endsAt, round: round.id, turn: round.turn, send: value => game.draw(value, me) }} />
         </div>
-        <div className="tools" role="group" aria-label="Çizim araçları">
+        {guessing && round.active !== me && round.guess?.stage !== 'transition' && <form className="guess-form" onSubmit={submitGuess}>
+          <label htmlFor="guess-input">Tahminin</label><div><input id="guess-input" value={guess} onChange={e => { setGuess(e.target.value); setFeedback('') }} maxLength={80} autoComplete="off" disabled={!online || round.guess?.stage !== 'playing'} placeholder="Kelimeyi yaz" /><button className="button primary" disabled={!online || round.guess?.stage !== 'playing' || !guess.trim()}>Gönder</button></div><p role="status">{feedback}</p>
+        </form>}
+        {(!guessing || round.active === me) && <div className="tools" role="group" aria-label="Çizim araçları">
           <div className="swatches" aria-label="Kalem renkleri">{PALETTE.map(([label, color], index) => <button type="button" key={color} disabled={!enabled}
             aria-label={label} title={label} aria-pressed={!brush.erase && brush.color === index} onClick={() => setBrush({ ...brush, color: index, erase: false })}>
             <span style={{ backgroundColor: color }} /></button>)}</div>
@@ -186,7 +207,7 @@ function Drawing({ room, online, game }: { room: RoomView & { round: RoundView }
             <button disabled={!enabled || !previous} aria-label="Geri al" title="Geri al" onClick={() => previous &&
               socket.emit('undo', { round: round.id, turn: round.turn, id: previous.id }, game.report)}><Undo2 size={20}/></button>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   </section>
@@ -211,14 +232,14 @@ function Results({ round, session, game }: { round: RoundView; session: Session;
   return <section className="stage results" data-testid="results" data-round={round.id}>
     <h1 className="sr-only">Tur sonucu</h1>
     <div className="result-layout">
-      <PromptCard prompt={round.prompt} />
+      {round.mode === 'guess' ? <><h1 className="guess-score">Birlikte {round.guessResults?.filter(r => r.success).length ?? 0}/6 kelime bildiniz!</h1><div className="guess-results">{round.guessResults?.map((result, index) => <figure className="frame" key={index}><Board strokes={result.strokes} label={`${index + 1}. tur çizimi`} /><figcaption>{index + 1}. {result.word} · {result.success ? `${result.seconds} saniye` : 'Süre doldu'}<br />{round.names[result.drawer]} çizdi</figcaption></figure>)}</div></> : <><PromptCard prompt={round.prompt} />
       <div className={'frames ' + (relay ? 'one-frame' : '')}>
         {(relay ? [0] : [0, 1]).map(index => <figure className="frame" key={index}>
           <Board strokes={relay ? round.strokes : round.strokes.filter(s => s.owner === index)}
             label={relay ? 'Ortak çizim' : labels[index] + ' çizimi'} />
           <figcaption>{relay ? round.names.join(' ve ') : round.names[index]}</figcaption>
         </figure>)}
-      </div>
+      </div></>}
     </div>
     {error && <p className="notice error" role="alert">{error}</p>}
     <div className="result-actions action-row">

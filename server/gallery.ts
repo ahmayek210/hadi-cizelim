@@ -91,7 +91,7 @@ export async function openGallery() {
       const { id, mode, names, date, quote, prompt, members } = round
       await query(
         'INSERT INTO drawing_gallery (id, member_a, member_b, metadata) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
-        [id, ...members, JSON.stringify({ id, mode, names, date, quote, prompt })],
+        [id, ...members, JSON.stringify({ id, mode, names, date, quote, prompt, ...(round.guessState ? { guessResults: round.guessState.results } : {}) })],
       )
     },
     get: async (id: string, file: ResultFile) => Buffer.from(await objects.get(key(id, file))),

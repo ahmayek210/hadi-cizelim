@@ -14,6 +14,7 @@ export const MODES = {
   reference: { name: 'Referanstan Çiz', duration: '60 sn' },
   sentence: { name: 'Cümleden Çiz', duration: '60 sn' },
   relay: { name: 'Sıralı Çizim', duration: '8 × 15 sn' },
+  guess: { name: 'Çiz ve Tahmin Et', duration: '6 × 30 sn' },
 } as const
 export type Mode = keyof typeof MODES
 export type Slot = 0 | 1
@@ -25,10 +26,12 @@ export type DrawInput = {
 export type Patch = { round: string; stroke: Omit<Stroke, 'points'>; offset: number; points: Point[] }
 export type Prompt = { sentence: string } | { reference: string }
 export type PlayerView = { name: string; slot: Slot; ready: boolean; connected: boolean }
+export type GuessResult = { word: string; success: boolean; seconds: number | null; drawer: Slot; strokes: Stroke[] }
+export type GuessView = { stage: 'preparing' | 'playing' | 'transition'; word?: string; hint: string; results: GuessResult[] }
 export type RoundInfo = {
-  id: string; mode: Mode; prompt: Prompt; names: [string, string]; date: string; quote: string;
+  id: string; mode: Mode; prompt: Prompt; names: [string, string]; date: string; quote: string; guessResults?: GuessResult[];
 }
-export type RoundView = RoundInfo & { turn: number; active: Slot | null; endsAt: number; strokes: Stroke[] }
+export type RoundView = RoundInfo & { turn: number; active: Slot | null; endsAt: number; strokes: Stroke[]; guess?: GuessView }
 export type RoomView = {
   code: string; me: Slot; host: Slot; players: PlayerView[]; mode: Mode; serverNow: number;
   phase: 'lobby' | 'drawing' | 'results'; round: RoundView | null;
@@ -47,13 +50,14 @@ export type SocketInput = {
   leave: (ack: (reply: Reply) => void) => void;
   draw: (input: DrawInput, ack: (reply: Reply) => void) => void;
   undo: (input: { round: string; turn: number; id: string }, ack: (reply: Reply) => void) => void;
+  guess: (input: { round: string; turn: number; text: string }, ack: (reply: Reply<{ correct: boolean }>) => void) => void;
   sync: () => void;
   clock: (ack: (time: number) => void) => void;
 }
 export type SocketOutput = {
   room: (room: RoomView) => void;
   patch: (patch: Patch) => void;
-  undo: (undo: { round: string; id: string }) => void;
+  undo: (undo: { round: string; turn: number; id: string }) => void;
   replaced: () => void;
 }
 export const normalizeCode = (code: string) => code.trim().toUpperCase()

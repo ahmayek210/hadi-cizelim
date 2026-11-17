@@ -4,13 +4,14 @@ import { FIXED, MODES, normalizeCode, REFERENCES, WIDTHS, PALETTE } from '../sha
 import type { DrawInput, Join, Mode, Patch, Reply, RoomView, RoundInfo, Slot, SocketInput, SocketOutput, Stroke } from '../shared/protocol.ts'
 import sentences from '../shared/sentences.json' with { type: 'json' }
 import { RateLimit } from './limits.ts'
+import { matches, selectWords, type Word } from './words.ts'
 
 type Peer = Socket<SocketInput, SocketOutput, Record<string, never>, { code?: string; slot?: Slot }>
 type Hub = Server<SocketInput, SocketOutput, Record<string, never>, Peer['data']>
 type Player = { slot: Slot; name: string; digest: string; sid: string | null; ready: boolean; gone: number; left: boolean }
 export type Round = RoundInfo & {
   starts: Slot; turn: number; endsAt: number; members: [string, string];
-  strokes: Stroke[]; byId: Map<string, Stroke>; used: Set<string>; points: number;
+  strokes: Stroke[]; byId: Map<string, Stroke>; used: Set<string>; points: number; guessState?: { stage: 'preparing' | 'playing' | 'transition'; words: Word[]; results: import('../shared/protocol.ts').GuessResult[]; startedAt: number };
 }
 type Room = {
   code: string; players: Player[]; mode: Mode; round: Round | null;
@@ -97,8 +98,9 @@ export class Game {
       round: round && {
         id: round.id, mode: round.mode, prompt: round.prompt, names: round.names, date: round.date, quote: round.quote,
         turn: round.turn, endsAt: round.endsAt,
-        active: room.phase === 'drawing' && round.mode === 'relay' ? activeSlot(round) : null,
-        strokes: room.phase === 'results' || round.mode === 'relay' ? round.strokes : round.strokes.filter(s => s.owner === me),
+        active: room.phase === 'drawing' && (round.mode === 'relay' || round.mode === 'guess') ? activeSlot(round) : null,
+        strokes: room.phase === 'results' || round.mode === 'relay' || round.mode === 'guess' ? round.strokes : round.strokes.filter(s => s.owner === me),
+        ...(round.guessState ? { guess: { stage: round.guessState.stage, hint: round.guessState.words[round.turn].text.replace(/[^ ]/gu, '_'), results: round.guessState.results, ...(room.phase === 'drawing' && round.guessState.stage !== 'transition' && activeSlot(round) === me ? { word: round.guessState.words[round.turn].text } : {}) }, ...(room.phase === 'results' ? { guessResults: round.guessState.results } : {}) } : {}),
       },
     }
   }
@@ -163,6 +165,18 @@ export class Game {
     const round = room.round
     if (!round || room.phase !== 'drawing' || Date.now() < round.endsAt) return
     if (room.timer) clearTimeout(room.timer)
+    if (round.mode === 'guess') {
+      const state = round.guessState!
+      while (room.phase === 'drawing' && Date.now() >= round.endsAt) {
+        if (state.stage === 'preparing') { state.stage = 'playing'; state.startedAt = round.endsAt; round.endsAt += 30_000 }
+        else if (state.stage === 'playing') { this.finishGuess(round, false, round.endsAt); round.endsAt += 3_000 }
+        else if (round.turn === 5) { room.phase = 'results'; this.results.set(round.id, round) }
+        else { round.turn++; state.stage = 'preparing'; round.strokes = []; round.byId.clear(); round.used.clear(); round.points = 0; round.endsAt += 3_000 }
+      }
+      if (room.phase === 'drawing') this.schedule(room)
+      this.publish(room)
+      return
+    }
     if (round.mode === 'relay') {
       while (Date.now() >= round.endsAt && round.turn < 7) {
         round.turn++
@@ -178,6 +192,13 @@ export class Game {
     this.publish(room)
   }
 
+  private finishGuess(round: Round, success: boolean, now: number) {
+    const state = round.guessState!
+    if (state.stage !== 'playing') return
+    state.results.push({ word: state.words[round.turn].text, success, seconds: success ? Math.max(0, Math.ceil((now - state.startedAt) / 1000)) : null, drawer: activeSlot(round), strokes: round.strokes.map(s => ({ ...s, points: [...s.points] })) })
+    state.stage = 'transition'
+  }
+
   private schedule(room: Room) {
     const endsAt = room.round!.endsAt
     room.timer = setTimeout(() => {
@@ -189,14 +210,15 @@ export class Game {
   private start(room: Room) {
     const players = [...room.players].sort((a, b) => a.slot - b.slot)
     if (!room.refs.length) room.refs = shuffledReferences()
-    const prompt = room.mode === 'reference' ? { reference: room.refs.pop()! } : { sentence: sentences[randomInt(sentences.length)] }
+    const prompt = room.mode === 'reference' ? { reference: room.refs.pop()! } : { sentence: room.mode === 'guess' ? 'Çiz ve Tahmin Et' : sentences[randomInt(sentences.length)] }
     room.round = {
       id: randomUUID(), mode: room.mode, prompt, names: [players[0].name, players[1].name],
       date: new Date().toISOString(), quote: QUOTES[randomInt(QUOTES.length)], starts: room.first,
-      turn: 0, endsAt: Date.now() + (room.mode === 'relay' ? 15_000 : 60_000),
+      turn: 0, endsAt: Date.now() + (room.mode === 'guess' ? 3_000 : room.mode === 'relay' ? 15_000 : 60_000),
+      ...(room.mode === 'guess' ? { guessState: { stage: 'preparing' as const, words: selectWords(), results: [], startedAt: 0 } } : {}),
       members: [players[0].digest, players[1].digest], strokes: [], byId: new Map(), used: new Set(), points: 0,
     }
-    if (room.mode === 'relay') room.first = room.first === 0 ? 1 : 0
+    if (room.mode === 'relay' || room.mode === 'guess') room.first = room.first === 0 ? 1 : 0
     room.phase = 'drawing'
     this.schedule(room)
     this.publish(room)
@@ -205,11 +227,11 @@ export class Game {
   private canDraw(room: Room, player: Player, roundId: string, turn: number) {
     const round = room.round
     return round && room.phase === 'drawing' && round.id === roundId && round.turn === turn &&
-      Date.now() < round.endsAt && (round.mode !== 'relay' || activeSlot(round) === player.slot) ? round : null
+      Date.now() < round.endsAt && (round.mode !== 'guess' || round.guessState?.stage === 'playing') && ((round.mode !== 'relay' && round.mode !== 'guess') || activeSlot(round) === player.slot) ? round : null
   }
 
   private drawingPeers(room: Room, player: Player) {
-    return room.round!.mode === 'relay' ? room.players : [player]
+    return room.round!.mode === 'relay' || room.round!.mode === 'guess' ? room.players : [player]
   }
 
   private draw(room: Room, player: Player, input: DrawInput) {
@@ -301,6 +323,24 @@ export class Game {
       return true
     }))
     socket.on('draw', (input, reply) => withPlayer(reply, (room, player) => this.draw(room, player, input), true))
+    socket.on('guess', (input, reply) => {
+      if (typeof reply !== 'function') return
+      const room = this.rooms.get(socket.data.code || '')
+      const player = room?.players.find(p => p.sid === socket.id)
+      if (!room || !player || !this.limits.take(player.digest + ':action', 35, 10_000)) return reply({ ok: false, error: INVALID })
+      this.advance(room)
+      const round = room.round, state = round?.guessState
+      if (!round || !state || room.phase !== 'drawing' || state.stage !== 'playing' || Date.now() >= round.endsAt || activeSlot(round) === player.slot || !input || input.round !== round.id || input.turn !== round.turn || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 80) return reply({ ok: false, error: INVALID })
+      const correct = matches(state.words[round.turn], input.text)
+      if (correct) {
+        this.finishGuess(round, true, Date.now())
+        if (room.timer) clearTimeout(room.timer)
+        round.endsAt = Date.now() + 3_000
+        this.schedule(room)
+        this.publish(room)
+      }
+      reply({ ok: true, value: { correct } })
+    })
     socket.on('undo', (input, reply) => withPlayer(reply, (room, player) => {
       if (!input || typeof input.id !== 'string') return false
       const round = this.canDraw(room, player, input.round, input.turn)
@@ -310,7 +350,7 @@ export class Game {
       if (stroke.owner !== player.slot || stroke !== round.strokes.findLast(s => s.owner === player.slot)) return false
       round.strokes.splice(round.strokes.indexOf(stroke), 1)
       round.byId.delete(stroke.id)
-      for (const p of this.drawingPeers(room, player)) if (p.sid) this.io.to(p.sid).emit('undo', { round: round.id, id: stroke.id })
+      for (const p of this.drawingPeers(room, player)) if (p.sid) this.io.to(p.sid).emit('undo', { round: round.id, turn: round.turn, id: stroke.id })
       return true
     }))
     socket.on('replay', reply => withPlayer(reply, room => {

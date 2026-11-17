@@ -80,7 +80,7 @@ export function Gallery({ session, sessions, change, close }: { session: Session
     catch (err) { setError(err instanceof Error ? err.message : 'Dosya indirilemedi.') }
     finally { setBusy(false) }
   }
-  const title = (entry: GalleryEntry) => 'sentence' in entry.prompt ? entry.prompt.sentence : 'Referans fotoğrafı'
+  const title = (entry: GalleryEntry) => entry.mode === 'guess' ? `Birlikte ${entry.guessResults?.filter(r => r.success).length ?? 0}/6 kelime bildiniz!` : 'sentence' in entry.prompt ? entry.prompt.sentence : 'Referans fotoğrafı'
   const date = (entry: GalleryEntry) => new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium' }).format(new Date(entry.date))
   return <section className={'stage gallery' + (selected ? ' gallery-detail' : '')}>
     <button className="text-button" onClick={() => selected ? setSelected(null) : close()}><ChevronLeft size={18} /> {selected ? 'Galeriye dön' : 'Geri dön'}</button>

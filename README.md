@@ -6,7 +6,7 @@
 
 1. Adını yazıp oda oluştur. Arkadaşına oda kodunu ya da davet bağlantısını gönder. İsterseniz ikiniz de `HADICIZELIM` koduyla sabit odaya katılabilirsiniz.
 2. Oda sahibi modu seçer. İki oyuncu hazır olunca oyunu başlatır.
-3. Referanstan Çiz ve Cümleden Çiz modlarında her oyuncu kendi tuvalinde 60 saniye çizer. Sıralı Çizim modunda ortak tuvalde her oyuncuya 15 saniyelik dörder sıra verilir.
+3. Referanstan Çiz ve Cümleden Çiz modlarında her oyuncu kendi tuvalinde 60 saniye çizer. Sıralı Çizim modunda ortak tuvalde her oyuncuya 15 saniyelik dörder sıra verilir. Çiz ve Tahmin Et modunda altı tur boyunca biriniz çizer, diğeriniz 30 saniyede kelimeyi tahmin eder; her tur roller değişir. Doğru tahminler ortak puanınıza eklenir.
 4. **Çizimi İndir** ile turun tamamını tek bir PNG olarak indir. **Galeriye kaydet** ile turu iki katılımcının özel albümünde sakla.
 
 Katılım anahtarı tarayıcıda saklanır. Sayfayı yenilediğinde aynı oyuncu olarak devam edebilirsin. Lobide bağlantısı kopan oyuncunun yeri beş dakika tutulur. Herkesin ayrıldığı odalar yeniden kullanılabilir. Oda kodu lobiyi bulur. Galeri erişimini o turdaki katılım anahtarları belirler. Tarayıcı verileri temizlenirse saklanan anahtarlar da kaybolur.
@@ -35,7 +35,7 @@ npx playwright install chromium firefox
 npm test
 ```
 
-`npm run assets` 19 JPG'yi açıp boyutlarını doğrular ve referans manifestini üretir. `shared/sentences.json` 40 özgün cümleyi içerir. Playwright üç modu gerçek süreleriyle çalıştırır ve yerel servisleri kendisi başlatır. Yayımlanan siteye karşı aynı paketi çalıştırmak için `E2E_SITE` ve `E2E_API` ortam değişkenlerini ver.
+`npm run assets` 19 JPG'yi açıp boyutlarını doğrular ve referans manifestini üretir. `shared/sentences.json` 40 özgün cümleyi içerir. `server/words.ts` çizilebilir Türkçe kelimeleri, açık eş anlamları ve sunucuda çalışan Türkçe karakter/yazım hatası eşleştirmesini içerir. Playwright üç modu gerçek süreleriyle çalıştırır ve yerel servisleri kendisi başlatır. Yayımlanan siteye karşı aynı paketi çalıştırmak için `E2E_SITE` ve `E2E_API` ortam değişkenlerini ver.
 
 ## Üretim
 

@@ -72,8 +72,8 @@ export function useRoom() {
     }
     const room = (state: RoomView) => { setView(state); setError('') }
     const patch = (value: Patch) => setView(state => patchRoom(state, value))
-    const undo = ({ round, id }: { round: string; id: string }) => setView(state =>
-      state?.round?.id === round ? { ...state, round: { ...state.round, strokes: state.round.strokes.filter(s => s.id !== id) } } : state)
+    const undo = ({ round, turn, id }: { round: string; turn: number; id: string }) => setView(state =>
+      state?.round?.id === round && state.round.turn === turn ? { ...state, round: { ...state.round, strokes: state.round.strokes.filter(s => s.id !== id) } } : state)
     const replaced = () => {
       forget()
       setSession(null)

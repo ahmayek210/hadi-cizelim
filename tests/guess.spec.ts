@@ -43,7 +43,9 @@ test('altı tur, gizlilik, yetki, yeniden bağlanma ve galeri', async ({ request
       const stroke = { round: current.id, turn, id: randomUUID(), offset: 0, color: 0, size: 1, erase: false, points: [[.1,.2], [.8,.2]] as [number, number][] }
       if (!turn) firstStroke = stroke.id
       expect((await peers[guesser].timeout(8000).emitWithAck('draw', stroke)).ok).toBeFalsy()
+      const patch = new Promise(resolve => peers[guesser].once('patch', resolve))
       expect((await peers[drawer].timeout(8000).emitWithAck('draw', stroke)).ok).toBeTruthy()
+      expect(await patch).toMatchObject({ round: current.id, points: stroke.points })
       await expect.poll(() => states[guesser]?.round?.strokes.length).toBe(0) // patches do not publish snapshots
       peers[guesser].emit('sync')
       await expect.poll(() => states[guesser]?.round?.strokes.length).toBe(1)
